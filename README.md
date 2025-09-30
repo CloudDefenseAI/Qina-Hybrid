@@ -13,6 +13,9 @@ Qina Hybrid setup for SAST/SCA
 5. Acknowledge that AWS CloudFormation will create resources and click **Create Stack**.
 
 Wait for the CloudFormation stack to complete successfully before proceeding to the next steps.
+> **Note**: External ID will be generated randomly and will go in the CloudFormation template.
+CloudDefense Account Id will be hardcoded and customer account id will be dynamic.
+
 
 ## 2. Lambda Configuration and Scanner Image Setup
 
