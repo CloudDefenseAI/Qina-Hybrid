@@ -8,10 +8,12 @@ Qina Hybrid setup for SAST/SCA
 1. In the CloudDefense dashboard, navigate to **Integration → GitHub**.
 2. Fill in the required details (AWS account number). 
    > **Note**: Do not fill GitHub token here directly.
+![Alt text](images/onboard-aws-ac.png)
 3. Select the Region in which you have the cluster and want to create the Lambda.
+![ALT text](images/hybrid-policy.png)
 4. Click **Create CloudFormation template** button.
 5. Acknowledge that AWS CloudFormation will create resources and click **Create Stack**.
-
+![ALT text](images/hybrid-cloudformation.png)
 Wait for the CloudFormation stack to complete successfully before proceeding to the next steps.
 > **Note**: External ID will be generated randomly and will go in the CloudFormation template.
 CloudDefense Account Id will be hardcoded and customer account id will be dynamic.
@@ -37,6 +39,7 @@ Configure the following environment variables in your Lambda function:
 | `CLI_IMAGE` | Cdefense CLI scanner image |
 | `IS_ENTERPRISE` | Set to `false` |
 | `GIT_ENTERPRISE_URL` | Your Source GIT enterprise URL |
+![ALT text](images/hybrid-lambda-env.png)
 
 ### Networking Configuration
 
@@ -45,11 +48,14 @@ Configure the Lambda networking settings:
 - Attach the Lambda to the same VPC as your Kubernetes cluster
 - Select the Security Group used by your cluster
 - Make sure that VPC and subnet have access to the Internet
+![ALT text](images/hybrid-lambda-vpc.png)
 
 ## 3. IAM Role Updates
 
 1. Go to the IAM Role created by CloudFormation (e.g., `CloudDefenseHybridSetupSt-HybridLambdaExecutionRole-*`).
-2. Edit the inline policy to update the cluster ARN with your own .
+![ALT text](images/hybrid-cloudformation-complete.png)
+2. Edit the inline policy to update the cluster ARN with your own.
+![ALT text](images/hybrid-cluster-arn-update.png)
 
 ## 4. Kubernetes Access Setup
 
