@@ -1,8 +1,18 @@
 # Qina-Hybrid
 Qina Hybrid setup for SAST/SCA
 
+## 1. Go Integration Setup and CloudFormation Creation
 
-# Lambda Configuration and Scanner Image Setup Documentation
+### Initial Setup in CloudDefense Dashboard
+
+1. In the CloudDefense dashboard, navigate to **Integration → GitHub**.
+2. Fill in the required details (AWS account number). 
+   > **Note**: Do not fill GitHub token here directly.
+3. Select the Region in which you have the cluster and want to create the Lambda.
+4. Click **Create CloudFormation template** button.
+5. Acknowledge that AWS CloudFormation will create resources and click **Create Stack**.
+
+Wait for the CloudFormation stack to complete successfully before proceeding to the next steps.
 
 ## 2. Lambda Configuration and Scanner Image Setup
 
@@ -25,7 +35,36 @@ Configure the following environment variables in your Lambda function:
 | `IS_ENTERPRISE` | Set to `false` |
 | `GIT_ENTERPRISE_URL` | Your Source GIT enterprise URL |
 
-### Add Image Secret
+### Networking Configuration
+
+Configure the Lambda networking settings:
+
+- Attach the Lambda to the same VPC as your Kubernetes cluster
+- Select the Security Group used by your cluster
+- Make sure that VPC and subnet have access to the Internet
+
+## 3. IAM Role Updates
+
+1. Go to the IAM Role created by CloudFormation (e.g., `CloudDefenseHybridSetupSt-HybridLambdaExecutionRole-*`).
+2. Edit the inline policy to update the cluster ARN with your own .
+
+## 4. Kubernetes Access Setup
+
+1. Log in to the Kubernetes cluster that will be used for running jobs.
+2. Run the following command:
+   ```bash
+   kubectl edit configmap aws-auth -n kube-system
+   ```
+3. Add a new group entry to provide the Lambda role access:
+   ```yaml
+   - groups:
+     - system:masters
+     rolearn: arn:aws:iam::1234567890:role/CloudDefenseHybridSetupSt-HybridLambdaExecutionRole*
+   ```
+   > **Note**: Use the role ARN dynamically created from CloudFormation
+4. Save and exit the editor.
+
+## 5. Add Image Secret
 
 To pull the private full scan image, create a Docker registry secret:
 
@@ -37,7 +76,7 @@ kubectl create secret docker-registry image-secret \
   --docker-email=YOUR_EMAIL
 ```
 
-### Verify the Secret
+## 6. Verify the Secret
 
 Confirm that the secret has been added successfully:
 
@@ -45,6 +84,10 @@ Confirm that the secret has been added successfully:
 kubectl get secrets
 kubectl describe secret image-secret
 ```
+
+✅ **Setup Complete**: At this point, the Lambda function will have network access and RBAC permissions to run jobs on the Kubernetes cluster.
+
+---
 
 ## Scanner Job Information
 
