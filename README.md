@@ -134,30 +134,4 @@ After completing a scan, the tool generates structured metadata and sends it to 
 }
 ```
 
-### Key Points
 
-- **Summary Block**: Captures total vulnerabilities, severity breakdown, the most affected file, and the primary issue
-- **Example Vulnerability Block**: Highlights a specific vulnerability with details such as rule ID, severity, CWE classification, taint source, sink, and line number
-- **Integration with QINA**: By sending these results to QINA, security findings are centralized, enabling easier triaging, remediation, and reporting
-
-## Data Migration from Current On-Prem Setup
-
-The following data will be migrated from the existing on-premises setup:
-
-- All old scan details and application history
-- User information and console platform credentials
-- List of previously scanned applications
-- OSS and build policies configurations
-- Alert settings
-- Organization settings
-- All other details present in Keycloak service and Cdefense database
-
-## Sensitive Information Handling
-
-### Existing User Credentials
-
-A mandatory force reset password will be provided to users for their first login in the hybrid setup to rotate credentials.
-
-### Scan Data
-
-All client data will be stored in a dedicated database instance allocated specifically for the client, with proper encryption in place to keep data safe and protected.
