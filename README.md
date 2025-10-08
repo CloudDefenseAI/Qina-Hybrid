@@ -1,5 +1,5 @@
 # Qina-Hybrid
-Qina Hybrid setup for SAST/SCA
+Qina Hybrid setup for Code Scanning.
 
 ## 1. Go Integration Setup and CloudFormation Creation
 
