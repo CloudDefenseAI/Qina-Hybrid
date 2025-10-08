@@ -120,16 +120,33 @@ After completing a scan, the tool generates structured metadata and sends it to 
     "total_vulnerabilities": 8,
     "critical": 6,
     "high": 2,
+    "medium": 0,
+    "low": 0,
     "affected_file": "/app/a.py",
-    "main_issue": "SQL Injection via user input"
+    "affected_lines": [28, 46],
+    "main_issue": "SQL Injection via untrusted user input (request.args.get('username'))",
+    "sink": "cursor.execute(query)"
   },
   "example_vulnerability": {
-    "rule_id": "flask-prestodb-sqli",
+   "rule_id": "flask-prestodb-sqli",
     "severity": "CRITICAL",
-    "cwe": "CWE-89",
+    "description": "Untrusted input might be used to build a database query, which can lead to a SQL injection vulnerability. An attacker can execute malicious SQL statements and gain unauthorized access to sensitive data, modify, delete data, or execute arbitrary system commands. To prevent this vulnerability, use prepared statements and parameterized queries.",
+    "file": "/app/a.py",
+    "line": 28,
+    "code_snippet": "cursor.execute(query)",
     "taint_source": "request.args.get('username')",
-    "sink": "cursor.execute(query)",
-    "line": 28
+    "cwe": "CWE-89: SQL Injection",
+    "references": [
+      "https://owasp.org/Top10/A03_2021-Injection"
+    ],
+    "technology_stack": [
+      "flask",
+      "flask-wtf",
+      "prestodb",
+      "python",
+      "web",
+      "wtforms"
+    ]
   }
 }
 ```
