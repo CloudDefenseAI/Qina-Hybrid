@@ -1,3 +1,6 @@
+# NOTE: RECOMMENDED APPROACH - Use AWS Secrets Manager instead of environment variables
+# This is one approach and should be fine-tuned based on client requirements.
+
 import os
 import json
 import base64
