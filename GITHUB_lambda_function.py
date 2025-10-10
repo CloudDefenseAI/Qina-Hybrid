@@ -222,23 +222,29 @@ def trigger_eks_job(cluster_name, region, job_name, image, env_vars, args_list, 
         env=[client.V1EnvVar(name=k, value=v) for k, v in env_vars.items()]
     )
     
+    # Get the image pull secret name from environment variable
+    image_pull_secret_name = os.environ.get("IMAGE_PULL_SECRET_NAME", "image-secret")
+    
     pod_spec = client.V1PodSpec(
-        restart_policy="Never", containers=[container]
+        restart_policy="Never", 
+        containers=[container],
+        image_pull_secrets=[client.V1LocalObjectReference(name=image_pull_secret_name)]
     )
     template = client.V1PodTemplateSpec(
         metadata=client.V1ObjectMeta(name=job_name), spec=pod_spec
     )
     spec = client.V1JobSpec(
-        template=template, backoff_limit=1, ttl_seconds_after_finished=30
+        template=template, backoff_limit=1, ttl_seconds_after_finished=180
     )
     job = client.V1Job(
         api_version="batch/v1", kind="Job",
         metadata=client.V1ObjectMeta(name=job_name), spec=spec
     )
 
-    print("[INFO] Submitting job to Kubernetes cluster...")
+    print(f"[INFO] Submitting job to Kubernetes cluster with image pull secret: {image_pull_secret_name}")
     batch_v1.create_namespaced_job(namespace=namespace, body=job)
     print(f"[SUCCESS] Job '{job_name}' successfully created in namespace '{namespace}'.")
+
 
 # --------------------
 # EKS Job Status Checker (NEW)
