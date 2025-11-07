@@ -46,8 +46,9 @@ Configure the following environment variables in your Lambda function:
 Configure the Lambda networking settings:
 
 - Attach the Lambda to the same VPC as your Kubernetes cluster
-- Select the Security Group used by your cluster
+- Select the Lambda Security Group and allow outbound HTTPS (443) to the EKS control plane endpoint or EKS Security Group
 - Make sure that VPC and subnet have access to the Internet
+- In the EKS Security Group, add an inbound rule on port 443 with source = Lambda Security Group
 ![ALT text](images/hybrid-lambda-vpc.png)
 
 ## 3. IAM Role Updates
