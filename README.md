@@ -47,7 +47,8 @@ Configure the Lambda networking settings:
 
 - Attach the Lambda to the same VPC as your Kubernetes cluster
 - Select the Lambda Security Group and allow outbound HTTPS (443) to the EKS control plane endpoint or EKS Security Group
-- Make sure that VPC and subnet have access to the Internet
+- Make sure that lambda have access to the Internet
+> **Note**: Add a NAT Gateway in a public subnet and update your private subnet’s route table to route 0.0.0.0/0 traffic through that NAT Gateway.
 - In the EKS Security Group, add an inbound rule on port 443 with source = Lambda Security Group
 ![ALT text](images/hybrid-lambda-vpc.png)
 
