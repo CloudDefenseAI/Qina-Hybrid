@@ -31,7 +31,7 @@ Configure the following environment variables in your Lambda function:
 |----------|-------------|
 | `EKS_CLUSTER_NAME` | Your Kubernetes cluster name |
 | `GITHUB_USERNAME` | Your GitHub username |
-| `GITHUB_TOKEN` | Your GitHub token |
+| `GITHUB_TOKEN` | Your GitHub token. See [How to Create a GitHub PAT](./GITHUB_PAT_CREATION.md) for detailed instructions. |
 | `AWS_REGION_HYBRID` | AWS region of the cluster |
 | `AWS_ACCESS_KEY_ID_HYBRID` | AWS S3 access key |
 | `AWS_SECRET_ACCESS_KEY_HYBRID` | AWS S3 secret key |
