@@ -1,6 +1,15 @@
 # Qina-Hybrid
 Qina Hybrid setup for Code Scanning.
 
+### Pre-requisites
+
+- **AWS Account**: An AWS account with permissions to create CloudFormation stacks, Lambda functions, and IAM roles.
+- **IAM Permissions**: The CloudFormation setup creates an IAM role that establishes a trust relationship with the CloudDefense AWS account (`arn:aws:iam::407638845061:root`). This role grants CloudDefense `sts:AssumeRole` and `lambda:InvokeFunction` permissions, allowing it to securely trigger scans in your environment.
+- **GitHub/GitLab Personal Access Token (PAT)**: A token with the correct scopes to allow cloning and analyzing repositories.
+  - **GitHub**: The PAT must have the full `repo` scope. See [How to Create a GitHub PAT](./GITHUB_PAT_CREATION.md).
+  - **GitLab**: The PAT must have `read_repository` and `read_api` scopes. See [How to Create a GitLab PAT](./GITLAB_PAT_CREATION.md).
+
+
 ## 1. Go Integration Setup and CloudFormation Creation
 
 ### Initial Setup in CloudDefense Dashboard
@@ -30,8 +39,8 @@ Configure the following environment variables in your Lambda function:
 | Variable | Description |
 |----------|-------------|
 | `EKS_CLUSTER_NAME` | Your Kubernetes cluster name |
-| `GITHUB_USERNAME` | Your GitHub username |
-| `GITHUB_TOKEN` | Your GitHub token |
+| `GITHUB_USERNAME/GITLAB_USERNAME` | Your GitHub or GitLab username |
+| `GITHUB_TOKEN/GITLAB_TOKEN` | Your GitHub or GitLab token. See [How to Create a GitHub PAT](./GITHUB_PAT_CREATION.md) and [How to Create a GitLab PAT](./GITLAB_PAT_CREATION.md) for detailed instructions. |
 | `AWS_REGION_HYBRID` | AWS region of the cluster |
 | `AWS_ACCESS_KEY_ID_HYBRID` | AWS S3 access key |
 | `AWS_SECRET_ACCESS_KEY_HYBRID` | AWS S3 secret key |
@@ -46,8 +55,10 @@ Configure the following environment variables in your Lambda function:
 Configure the Lambda networking settings:
 
 - Attach the Lambda to the same VPC as your Kubernetes cluster
-- Select the Security Group used by your cluster
-- Make sure that VPC and subnet have access to the Internet
+- Select the Lambda Security Group and allow outbound HTTPS (443) to the EKS control plane endpoint or EKS Security Group
+- Make sure that lambda have access to the Internet
+> **Note**: Add a NAT Gateway in a public subnet and update your private subnet’s route table to route 0.0.0.0/0 traffic through that NAT Gateway.
+- In the EKS Security Group, add an inbound rule on port 443 with source = Lambda Security Group
 ![ALT text](images/hybrid-lambda-vpc.png)
 
 ## 3. IAM Role Updates
