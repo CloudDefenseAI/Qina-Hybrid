@@ -7,10 +7,12 @@ The token must be generated with the correct scopes to ensure repository access.
 ### 1. Navigate to Developer Settings
 1. In GitHub, go to your user **Settings** (click your profile picture in the top-right corner).
 2. In the left sidebar, scroll down and click on **Developer settings**.
+![ALT text](images/git_developer_settings.png)
 
 ### 2. Start Token Generation
 1. In the Developer settings menu, select **Personal access tokens** and then **Tokens (classic)**.
 2. Click the **Generate new token** dropdown, and then choose **Generate new token (classic)**.
+![ALT text](images/git_token_classic.png)
 
 ### 3. Configure Token Details and Scopes (CRITICAL)
 On the "New personal access token" page:
@@ -18,6 +20,7 @@ On the "New personal access token" page:
 - **Expiration**: Set an appropriate expiration date (e.g., 90 days is recommended).
 - **Select Scopes**: Under the "Select scopes" section, you **must** check the main `repo` checkbox.
   > **Note**: Checking the top-level `repo` scope grants the necessary permissions to clone and analyze private repositories.
+![ALT text](images/git_permission.png)
 
 ### 4. Finalize and Copy the Token
 1. Scroll to the bottom and click **Generate token**.
