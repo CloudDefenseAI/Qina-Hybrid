@@ -1,4 +1,4 @@
-# Qina-Hybrid
+# Qina-Hybrid Setup in AWS Cloud
 Qina Hybrid setup for Code Scanning.
 
 ### Pre-requisites
