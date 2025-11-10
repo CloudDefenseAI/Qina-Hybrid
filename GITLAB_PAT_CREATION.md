@@ -8,6 +8,7 @@ A Personal Access Token is used to authenticate with the GitLab API and can also
 
 ## Step 2: Start the Token Creation Process
 On the "Personal access tokens" page, click the **Add new token** button, typically found in the top-right corner.
+![ALT text](images/gitlab_pat.png)
 
 ## Step 3: Configure the Token Details
 Fill in the required details for your new token:
@@ -19,6 +20,7 @@ Fill in the required details for your new token:
   - For cloning private projects, check the **`read_repository`** scope.
   - You may also need **`read_api`** if the integration requires access to the GitLab API (e.g., to list projects or groups).
   > **Note**: For security, always grant only the minimum required scopes.
+![ALT text](images/gitlab_permission.png)
 
 ## Step 4: Create the Token
 After configuring the name, expiration, and scopes, click the **Create personal access token** button at the bottom of the page.
