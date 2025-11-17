@@ -48,6 +48,33 @@ Configure the following environment variables in your Lambda function:
 | `CLI_IMAGE` | Cdefense CLI scanner image |
 | `IS_ENTERPRISE` | Set to `false` |
 | `GIT_ENTERPRISE_URL` | Your Source GIT enterprise URL |
+
+### Multi-Team Configuration (Optional)
+
+For organizations with multiple teams using different GitHub/GitLab instances, you can configure team-specific environment variables. Replace `<TEAMNAME>` with your team identifier (e.g., `TEAM_ALPHA_GITHUB_TOKEN`).
+
+**For Enterprise Instances:**
+
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `TEAM_<TEAMNAME>_GITHUB_ENTERPRISE_URL` | GitHub Enterprise instance URL | Yes |
+| `TEAM_<TEAMNAME>_GITHUB_ENTERPRISE_TOKEN` | GitHub Enterprise personal access token | Yes |
+| `TEAM_<TEAMNAME>_GITHUB_ENTERPRISE_USERNAME` | GitHub Enterprise username | Optional |
+| `TEAM_<TEAMNAME>_GITLAB_ENTERPRISE_URL` | GitLab Enterprise instance URL | Yes |
+| `TEAM_<TEAMNAME>_GITLAB_ENTERPRISE_TOKEN` | GitLab Enterprise personal access token | Yes |
+| `TEAM_<TEAMNAME>_GITLAB_ENTERPRISE_USERNAME` | GitLab Enterprise username | Optional |
+
+**For Public Instances (fallback if enterprise vars not set):**
+
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `TEAM_<TEAMNAME>_GITHUB_URL` | Public GitHub URL (defaults to github.com if not set) | Optional |
+| `TEAM_<TEAMNAME>_GITHUB_TOKEN` | GitHub personal access token | Yes |
+| `TEAM_<TEAMNAME>_GITHUB_USERNAME` | GitHub username | Optional |
+| `TEAM_<TEAMNAME>_GITLAB_URL` | Public GitLab URL (defaults to gitlab.com if not set) | Optional |
+| `TEAM_<TEAMNAME>_GITLAB_TOKEN` | GitLab personal access token | Yes |
+| `TEAM_<TEAMNAME>_GITLAB_USERNAME` | GitLab username | Optional |
+
 ![ALT text](images/hybrid-lambda-env.png)
 
 ### Networking Configuration
