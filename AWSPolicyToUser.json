@@ -1,0 +1,96 @@
+{
+    "AWS_Managed_Policies": [
+        "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy",
+        "arn:aws:iam::aws:policy/AmazonEC2FullAccess",
+        "arn:aws:iam::aws:policy/AWSCloudFormationFullAccess",
+        "arn:aws:iam::aws:policy/AWSLambda_FullAccess",
+        "arn:aws:iam::aws:policy/AWSCloudShellFullAccess"
+    ],
+    "Custom_IAM_Policy": {
+        "Version": "2012-10-17",
+        "Statement": [
+            {
+                "Sid": "IAMRoleManagement",
+                "Effect": "Allow",
+                "Action": [
+                    "iam:CreateRole",
+                    "iam:DeleteRole",
+                    "iam:GetRole",
+                    "iam:PassRole",
+                    "iam:AttachRolePolicy",
+                    "iam:DetachRolePolicy",
+                    "iam:PutRolePolicy",
+                    "iam:DeleteRolePolicy",
+                    "iam:GetRolePolicy",
+                    "iam:TagRole",
+                    "iam:UntagRole",
+                    "iam:ListAttachedRolePolicies",
+                    "iam:ListRolePolicies",
+                    "iam:CreateServiceLinkedRole",
+                    "iam:UpdateAssumeRolePolicy"
+                ],
+                "Resource": "*"
+            },
+            {
+                "Sid": "EKSFullManagement",
+                "Effect": "Allow",
+                "Action": [
+                    "eks:*"
+                ],
+                "Resource": "*"
+            },
+            {
+                "Sid": "AutoScalingManagement",
+                "Effect": "Allow",
+                "Action": [
+                    "autoscaling:*"
+                ],
+                "Resource": "*"
+            },
+            {
+                "Sid": "S3ReadAccess",
+                "Effect": "Allow",
+                "Action": [
+                    "s3:GetObject",
+                    "s3:ListBucket"
+                ],
+                "Resource": "*"
+            },
+            {
+                "Sid": "SNSPublish",
+                "Effect": "Allow",
+                "Action": [
+                    "sns:Publish",
+                    "sns:Subscribe"
+                ],
+                "Resource": "*"
+            },
+            {
+                "Sid": "CloudWatchLogs",
+                "Effect": "Allow",
+                "Action": [
+                    "logs:CreateLogGroup",
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents",
+                    "logs:DescribeLogGroups"
+                ],
+                "Resource": "*"
+            },
+            {
+                "Sid": "STSAssumeRole",
+                "Effect": "Allow",
+                "Action": [
+                    "sts:GetCallerIdentity"
+                ],
+                "Resource": "*"
+            },
+            {
+                "Effect": "Allow",
+                "Action": [
+                    "access-analyzer:ListPolicyGenerations"
+                ],
+                "Resource": "*"
+            }
+        ]
+    }
+}
