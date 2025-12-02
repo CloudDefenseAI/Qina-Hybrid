@@ -113,6 +113,7 @@ Run the following command to create the cluster:
 ```powershell
 eksctl create cluster -f eks-cluster-config.yaml
 ```
+![ALT text](images/eksctlcreate.png)
 
 **Important Notes:**
 - This process takes approximately **15-20 minutes**
