@@ -7,6 +7,8 @@ This guide walks you through creating an Amazon EKS cluster with one managed nod
 - **AWS Account** with appropriate permissions
 - **AWS CLI** installed and configured
 - **kubectl** installed
+  
+## Login to AWS terminal to proceed with executing the commands. 
 
 ## Step 1: Install eksctl
 
