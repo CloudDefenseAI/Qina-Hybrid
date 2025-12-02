@@ -7,8 +7,8 @@ When the cluster creation completes, the following AWS resources will be created
 - API server endpoint
 - etcd cluster for state storage
 
-### 2. VPC and Networking
-- **VPC** with CIDR `10.20.0.0/16`
+### 2. VPC and Networking (Counts will get adjusted according to the CIDR range automatically)
+- **VPC** with CIDR `10.20.0.0/16` 
 - **2 Public Subnets** (for load balancers and NAT Gateway)
 - **2 Private Subnets** (for worker nodes)
 - **Internet Gateway** (for public subnet internet access)
