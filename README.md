@@ -6,9 +6,11 @@ Qina Hybrid setup for Code Scanning.
 - **AWS Account**: An AWS account with permissions to create CloudFormation stacks, Lambda functions, and IAM roles.
 - **EKS Cluster**: An Amazon EKS cluster with one node to run scan jobs. See [EKS Cluster Setup Guide](./EKS_CLUSTER_SETUP.md) for detailed instructions.
 - **IAM Permissions**: The CloudFormation setup creates an IAM role that establishes a trust relationship with the CloudDefense AWS account (`arn:aws:iam::407638845061:root`). This role grants CloudDefense `sts:AssumeRole` and `lambda:InvokeFunction` permissions, allowing it to securely trigger scans in your environment.
+- The CloudDefense Portal account will be created on the call, as it must be provisioned by the CloudDefense team.
 - **GitHub/GitLab Personal Access Token (PAT)**: A token with the correct scopes to allow cloning and analyzing repositories.
   - **GitHub**: The PAT must have the full `repo` scope. See [How to Create a GitHub PAT](./GITHUB_PAT_CREATION.md).
   - **GitLab**: The PAT must have `read_repository` and `read_api` scopes. See [How to Create a GitLab PAT](./GITLAB_PAT_CREATION.md).
+ 
 
 
 ## 1. Go Integration Setup and CloudFormation Creation
