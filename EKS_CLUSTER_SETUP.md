@@ -72,7 +72,7 @@ metadata:
   region: us-west-2
 
 vpc:
-  cidr: 10.20.0.0/16  # use /24, /28 for Smaller VPC
+  cidr: 10.20.0.0/16  # use /24, /28 for Smaller VPC (It will require explicit setup for provisioning VPC)
 
 managedNodeGroups:
   - name: cdefense-node
