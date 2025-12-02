@@ -1,0 +1,27 @@
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+
+metadata:
+  name: cdefense-hybrid
+  region: us-west-2
+
+vpc:
+  cidr: 10.20.0.0/16
+
+managedNodeGroups:
+  - name: cdefense-node
+    availabilityZones: ["us-west-2a"]
+    instanceTypes: ["t3.medium"]
+    desiredCapacity: 1
+    minSize: 1
+    maxSize: 2
+    volumeEncrypted: true
+    privateNetworking: true
+    disableIMDSv1: true
+    iam:
+      withAddonPolicies:
+        autoScaler: true
+    tags:
+      k8s.io/cluster-autoscaler/enabled: "true"
+      k8s.io/cluster-autoscaler/cdefense-hybrid: "owned"
+      Owner: "CloudDefense"
