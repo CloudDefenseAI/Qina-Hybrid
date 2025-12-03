@@ -53,25 +53,53 @@ Configure the following environment variables in your Lambda function:
 | `GIT_ENTERPRISE_URL` | Your Source GIT enterprise URL |
 ![ALT text](images/hybrid-lambda-env.png)
 
-### Networking Configuration
+## 3 Networking Configuration
 
-Configure the Lambda networking settings:
+### Attach Lambda to EKS Cluster VPC
 
-- Attach the Lambda to the same VPC as your Kubernetes cluster
-- Select the Lambda Security Group and allow outbound HTTPS (443) to the EKS control plane endpoint or EKS Security Group
-- Make sure that lambda have access to the Internet
-> **Note**: Add a NAT Gateway in a public subnet and update your private subnet’s route table to route 0.0.0.0/0 traffic through that NAT Gateway.
-- In the EKS Security Group, add an inbound rule on port 443 with source = Lambda Security Group
-![ALT text](images/hybrid-lambda-vpc.png)
+Configure the Lambda function to use the same VPC as the cdefense-hybrid EKS cluster for resource access. Select two private subnets from different Availability Zones and the cluster's security group for optimal availability and security.
 
-## 3. IAM Role Updates
+#### Required Steps
+
+1. In Lambda configuration, select VPC from the left sidebar and click Edit.
+
+![Hybrid Lambda VPC configuration](images/hybrid-lambda-vpc.png)
+
+2. Get VPC ID via AWS CLI:
+```bash
+aws eks describe-cluster --name cdefense-hybrid --region us-west-2 --query "cluster.resourcesVpcConfig.vpcId" --output text
+```
+
+3. Select this VPC.
+
+4. Choose 2 private subnets from different Availability Zones.
+
+<img width="1760" height="874" alt="Screenshot 2025-12-03 at 1 21 42 PM" src="https://github.com/user-attachments/assets/d5028cbb-1cb7-4de3-aff2-8501769373be" />
+
+5. Get EKS cluster security group:
+```bash
+aws eks describe-cluster --name cdefense-hybrid --region us-west-2 --query "cluster.resourcesVpcConfig.clusterSecurityGroupId" --output text
+```
+
+6. Add this security group.
+
+7. Click Save to apply changes.
+
+## Optional Steps
+
+These are not needed if using the EKS-provisioned VPC and security group.
+
+- Select Lambda security group and allow outbound HTTPS (port 443) to EKS control plane or EKS security group.
+- Ensure Lambda internet access via NAT Gateway in public subnet; route 0.0.0.0/0 through it in private subnet route table.
+- In EKS security group, add inbound rule for port 443 with Lambda security group as source.
+## 4. IAM Role Updates
 
 1. Go to the IAM Role created by CloudFormation (e.g., `CloudDefenseHybridSetupSt-HybridLambdaExecutionRole-*`).
 ![ALT text](images/hybrid-cloudformation-complete.png)
 2. Edit the inline policy to update the cluster ARN with your own.
 ![ALT text](images/hybrid-cluster-arn-update.png)
 
-## 4. Kubernetes Access Setup
+## 5. Kubernetes Access Setup
 
 1. Log in to the Kubernetes cluster that will be used for running jobs.
 2. Run the following command:
@@ -87,7 +115,7 @@ Configure the Lambda networking settings:
    > **Note**: Use the role ARN dynamically created from CloudFormation
 4. Save and exit the editor.
 
-## 5. Add Image Secret
+## 6. Add Image Secret
 
 To pull the private full scan image, create a Docker registry secret:
 
@@ -96,10 +124,11 @@ kubectl create secret docker-registry image-secret \
   --docker-server=https://index.docker.io/v1/ \
   --docker-username=YOUR_DOCKERHUB_USERNAME \
   --docker-password=YOUR_DOCKERHUB_PASSWORD \
-  --docker-email=YOUR_EMAIL
+  --docker-email=YOUR_EMAIL \
+  -n default
 ```
 
-## 6. Verify the Secret
+## 7. Verify the Secret
 
 Confirm that the secret has been added successfully:
 
