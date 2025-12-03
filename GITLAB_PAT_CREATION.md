@@ -3,8 +3,8 @@ A Personal Access Token is used to authenticate with the GitLab API and can also
 
 ## Step 1: Access the Personal Access Tokens Section
 1. Log in to your GitLab account.
-2. In the left-hand sidebar, navigate to your **User Settings**.
-3. Click on **Personal access tokens**.
+2. Click on the Profile Icon at top right corner and open Edit Profile.
+3. Click on **Personal access tokens** from left sidebar.
 
 ## Step 2: Start the Token Creation Process
 On the "Personal access tokens" page, click the **Add new token** button, typically found in the top-right corner.
