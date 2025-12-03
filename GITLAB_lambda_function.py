@@ -1,7 +1,6 @@
 # NOTE: RECOMMENDED APPROACH - Use AWS Secrets Manager instead of environment variables
 # This is one approach and should be fine-tuned based on client requirements.
 
-
 import os
 import json
 import base64
@@ -40,6 +39,7 @@ def list_repositories(name, target_type, token, page=1, is_enterprise=False):
     """
     Fetches a list of repositories for a given GitLab user or group,
     supporting both public and enterprise GitLab.
+    For users, automatically fetches both owned and contributed projects.
     """
     print(f"[INFO] Fetching GitLab repositories (Enterprise: {is_enterprise})...")
     headers = {
@@ -50,7 +50,9 @@ def list_repositories(name, target_type, token, page=1, is_enterprise=False):
     base_url = get_gitlab_api_base_url(is_enterprise)
     
     if target_type == "user":
-        # For user repos, we need to get the user ID first
+        # For user repos, fetch both owned and contributed projects
+        
+        # 1. Get owned projects - need to get user ID first
         user_url = f"{base_url}/users?username={name}"
         user_response = requests.get(user_url, headers=headers)
         if user_response.status_code != 200 or not user_response.json():
@@ -58,35 +60,89 @@ def list_repositories(name, target_type, token, page=1, is_enterprise=False):
             raise Exception(f"GitLab API error fetching user: {user_response.text}")
         
         user_id = user_response.json()[0]['id']
-        repos_url = f"{base_url}/users/{user_id}/projects?per_page=100&page={page}"
+        
+        # Fetch owned projects
+        owned_repos_url = f"{base_url}/users/{user_id}/projects?per_page=100&page={page}"
+        print(f"[DEBUG] Fetching owned projects: {owned_repos_url}")
+        owned_response = requests.get(owned_repos_url, headers=headers)
+        
+        if owned_response.status_code != 200:
+            print(f"[ERROR] GitLab API error fetching owned repos ({owned_response.status_code}): {owned_response.text}")
+            raise Exception(f"GitLab API error ({owned_response.status_code}): {owned_response.text}")
+        
+        owned_has_next = owned_response.headers.get("X-Next-Page", "").strip() != ""
+        owned_repos = owned_response.json()
+        
+        # 2. Fetch contributed projects (where user is member but not owner)
+        contributed_repos_url = f"{base_url}/projects?membership=true&owned=false&per_page=100&page={page}"
+        print(f"[DEBUG] Fetching contributed projects: {contributed_repos_url}")
+        contributed_response = requests.get(contributed_repos_url, headers=headers)
+        
+        contributed_repos = []
+        contributed_has_next = False
+        
+        if contributed_response.status_code == 200:
+            contributed_repos = contributed_response.json()
+            contributed_has_next = contributed_response.headers.get("X-Next-Page", "").strip() != ""
+            print(f"[INFO] Retrieved {len(contributed_repos)} contributed repositories")
+        else:
+            # Log warning but don't fail - contributed projects are supplementary
+            print(f"[WARN] Could not fetch contributed projects ({contributed_response.status_code}): {contributed_response.text}")
+        
+        # Combine and deduplicate by project path
+        all_repos = owned_repos + contributed_repos
+        seen_paths = set()
+        unique_repos = []
+        for repo in all_repos:
+            path = repo.get("path_with_namespace")
+            if path not in seen_paths:
+                seen_paths.add(path)
+                unique_repos.append(repo)
+        
+        # hasNext is true if either source has more pages
+        has_next = owned_has_next or contributed_has_next
+        
+        formatted_repos = []
+        for repo in unique_repos:
+            formatted_repos.append({
+                "name": repo.get("path_with_namespace"),
+                "cloneUrl": repo.get("http_url_to_repo"),
+                "htmlUrl": repo.get("web_url"),
+                "language": "Gitlab",
+                "private": repo.get("visibility") == "private"
+            })
+        
+        print(f"[INFO] Retrieved {len(formatted_repos)} total repositories (owned + contributed, deduplicated)")
+        return {"content": formatted_repos, "hasNext": has_next}
+    
     else:
         # For groups (orgs in GitLab)
         repos_url = f"{base_url}/groups/{name}/projects?per_page=100&page={page}&include_subgroups=true"
-    
-    # Debug line to confirm the final URL
-    print(f"[DEBUG] Calling URL: {repos_url}")
-    
-    response = requests.get(repos_url, headers=headers)
+        
+        # Debug line to confirm the final URL
+        print(f"[DEBUG] Calling URL: {repos_url}")
+        
+        response = requests.get(repos_url, headers=headers)
 
-    if response.status_code != 200:
-        print(f"[ERROR] GitLab API error ({response.status_code}): {response.text}")
-        raise Exception(f"GitLab API error ({response.status_code}): {response.text}")
+        if response.status_code != 200:
+            print(f"[ERROR] GitLab API error ({response.status_code}): {response.text}")
+            raise Exception(f"GitLab API error ({response.status_code}): {response.text}")
 
-    # Check for pagination
-    has_next = response.headers.get("X-Next-Page", "").strip() != ""
-    
-    formatted_repos = []
-    for repo in response.json():
-        formatted_repos.append({
-            "name": repo.get("path_with_namespace"),
-            "cloneUrl": repo.get("http_url_to_repo"),
-            "htmlUrl": repo.get("web_url"),
-            "language": "Gitlab",
-            "private": repo.get("visibility") == "private"
-        })
+        # Check for pagination
+        has_next = response.headers.get("X-Next-Page", "").strip() != ""
+        
+        formatted_repos = []
+        for repo in response.json():
+            formatted_repos.append({
+                "name": repo.get("path_with_namespace"),
+                "cloneUrl": repo.get("http_url_to_repo"),
+                "htmlUrl": repo.get("web_url"),
+                "language": "Gitlab",
+                "private": repo.get("visibility") == "private"
+            })
 
-    print(f"[INFO] Retrieved {len(formatted_repos)} repositories")
-    return {"content": formatted_repos, "hasNext": has_next}
+        print(f"[INFO] Retrieved {len(formatted_repos)} repositories")
+        return {"content": formatted_repos, "hasNext": has_next}
 
 # --------------------
 # GitLab Branch Listing
