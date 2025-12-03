@@ -60,8 +60,14 @@ Verify:
 ```powershell
 kubectl version --client
 ```
+## Step 3: Get Availability Zones
+Execute following command to get the availability zones and the available CIDR range.
 
-## Step 3: EKS Cluster Configuration
+```bash
+aws ec2 describe-subnets --filters "Name=vpc-id,Values=$(aws ec2 describe-vpcs --filters Name=is-default,Values=false --query 'Vpcs[0].VpcId' --output text --region us-west-2)" "Name=map-public-ip-on-launch,Values=false" --query 'Subnets[].[AvailabilityZone,SubnetId,CidrBlock]' --output table --region us-west-2
+```
+
+## Step 4: EKS Cluster Configuration
 
 Create a file named `eks-cluster-config.yaml` with the following configuration:
 
@@ -73,6 +79,7 @@ metadata:
   name: cdefense-hybrid
   region: us-west-2
 
+# Remove VPC if not sure, what range to put. 
 vpc:
   cidr: 10.20.0.0/16  # use /24, /28 for Smaller VPC (It will require explicit setup for provisioning VPC)
 
@@ -108,7 +115,7 @@ managedNodeGroups:
 - **Private Networking**: Nodes in private subnets
 - **IMDSv1**: Disabled for enhanced security (only IMDSv2 allowed)
 
-## Step 4: Create the EKS Cluster
+## Step 5: Create the EKS Cluster
 
 Run the following command to create the cluster:
 
@@ -122,7 +129,7 @@ eksctl create cluster -f eks-cluster-config.yaml
 - eksctl will automatically configure kubectl context
 - Progress will be displayed in the terminal
 
-## Step 5: Verify Cluster Creation
+## Step 6: Verify Cluster Creation
 
 After the cluster is created, verify it's working correctly:
 
