@@ -48,7 +48,7 @@ Configure the following environment variables in your Lambda function:
 | `AWS_ACCESS_KEY_ID_HYBRID` | AWS S3 access key |
 | `AWS_SECRET_ACCESS_KEY_HYBRID` | AWS S3 secret key |
 | `BUCKET_NAME_HYBRID` | AWS S3 bucket name |
-| `CLI_IMAGE` | Cdefense CLI scanner image |
+| `CLI_IMAGE` | Cdefense CLI scanner image (`cdefense/fullscan:latest`) |
 | `IS_ENTERPRISE` | Set to `false` |
 | `GIT_ENTERPRISE_URL` | Your Source GIT enterprise URL |
 ![ALT text](images/hybrid-lambda-env.png)
