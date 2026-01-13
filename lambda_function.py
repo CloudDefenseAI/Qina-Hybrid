@@ -10,6 +10,7 @@ from botocore.signers import RequestSigner
 import datetime
 import secrets 
 import re
+from urllib.parse import urlparse, urlunparse
 
 
 # --------------------
@@ -373,84 +374,230 @@ def github_get_default_branch(repo_url, token, base_url=None):
 def get_gitlab_api_base_url(base_url=None):
     """
     Returns the appropriate GitLab API base URL.
-    
+
     Args:
         base_url: Custom base URL for enterprise GitLab (optional)
-    
+
     Returns:
-        str: API base URL
+        str: API base URL (always includes /api/v4)
     """
-    if base_url:
-        # Enterprise URL - expecting format like https://your-gitlab-instance.com/api/v4
-        return base_url.rstrip('/')
-    else:
+    if not base_url:
         return "https://gitlab.com/api/v4"
+
+    base_url = base_url.rstrip('/')
+
+    # If the URL is just https://gitlab.com (public GitLab without /api/v4), treat as public
+    if base_url == "https://gitlab.com":
+        return "https://gitlab.com/api/v4"
+
+    # For any URL, ensure /api/v4 is present
+    if not base_url.endswith('/api/v4'):
+        base_url = f"{base_url}/api/v4"
+
+    return base_url
 
 
 # --------------------
 # GitLab Repo Listing
 # --------------------
-def gitlab_list_repositories(name, target_type, token, base_url=None, page=1, per_page=100):
+def gitlab_list_repositories(name, target_type, token, base_url=None, page=0, per_page=50, search=None):
     """
     Fetches a list of repositories for a given GitLab user or group,
     supporting both public and enterprise GitLab.
-    
+
     Args:
         name: Username or group name
         target_type: "user" or "org" (org = group in GitLab)
         token: GitLab access token (team-specific)
         base_url: Custom GitLab base URL for enterprise (optional)
-        page: Page number for pagination
-        per_page: Number of results per page (default: 100)
+        page: 0-based page number from client (will be converted to 1-based for GitLab)
+        per_page: Number of items per page (max 100 for GitLab API)
+        search: Optional repository name to search for (uses GitLab's native search)
     """
-    is_enterprise = base_url is not None
-    print(f"[INFO] Fetching GitLab repositories (Enterprise: {is_enterprise})...")
-    
+    # Determine if this is truly enterprise (not just https://gitlab.com)
+    is_enterprise = base_url is not None and base_url.rstrip('/') not in ["https://gitlab.com", "https://gitlab.com/api/v4"]
+    print(f"[INFO] Fetching GitLab repositories (Enterprise: {is_enterprise}, Search: {search})...")
+
     headers = {
         "PRIVATE-TOKEN": token,
         "Accept": "application/json"
     }
-    
+
     api_base_url = get_gitlab_api_base_url(base_url)
-    
+
+    # Convert 0-based pagination (from client) to 1-based (GitLab API)
+    gitlab_page = page + 1
+
+    # Ensure per_page is within GitLab's limits (1-100)
+    per_page = min(max(1, per_page), 100)
+
+    print(f"[DEBUG] Client page: {page}, GitLab page: {gitlab_page}, per_page: {per_page}")
+
     if target_type == "user":
-        # For user repos, we need to get the user ID first
-        user_url = f"{api_base_url}/users?username={name}"
-        user_response = requests.get(user_url, headers=headers)
-        if user_response.status_code != 200 or not user_response.json():
-            print(f"[ERROR] GitLab API error fetching user: {user_response.text}")
-            raise Exception(f"GitLab API error fetching user: {user_response.text}")
-        
-        user_id = user_response.json()[0]['id']
-        repos_url = f"{api_base_url}/users/{user_id}/projects?per_page={per_page}&page={page}"
+        # For user repos, we can use the /projects endpoint with membership filter
+
+        if search and search.strip():
+            # Use GitLab's native search API for projects
+            # This searches across all projects the user has access to
+            search_url = f"{api_base_url}/projects?membership=true&search={requests.utils.quote(search)}&per_page={per_page}&page={gitlab_page}"
+            print(f"[DEBUG] Using GitLab native search: {search_url}")
+
+            response = requests.get(search_url, headers=headers)
+
+            if response.status_code != 200:
+                print(f"[ERROR] GitLab API error ({response.status_code}): {response.text}")
+                raise Exception(f"GitLab API error ({response.status_code}): {response.text}")
+
+            has_next = response.headers.get("X-Next-Page", "").strip() != ""
+            repos = response.json()
+
+            formatted_repos = []
+            for repo in repos:
+                formatted_repos.append({
+                    "name": repo.get("path_with_namespace"),
+                    "cloneUrl": repo.get("http_url_to_repo"),
+                    "htmlUrl": repo.get("web_url"),
+                    "language": "Gitlab",
+                    "private": repo.get("visibility") == "private",
+                    "visibility": repo.get("visibility", "public")
+                })
+
+            print(f"[INFO] GitLab search returned {len(formatted_repos)} matching repositories")
+            return {"content": formatted_repos, "hasNext": has_next}
+
+        else:
+            # No search - fetch owned + contributed projects
+
+            # Get user ID first
+            user_url = f"{api_base_url}/users?username={name}"
+            user_response = requests.get(user_url, headers=headers)
+            if user_response.status_code != 200 or not user_response.json():
+                print(f"[ERROR] GitLab API error fetching user: {user_response.text}")
+                raise Exception(f"GitLab API error fetching user: {user_response.text}")
+
+            user_id = user_response.json()[0]['id']
+
+            # Fetch owned projects
+            owned_repos_url = f"{api_base_url}/users/{user_id}/projects?per_page={per_page}&page={gitlab_page}"
+            print(f"[DEBUG] Fetching owned projects: {owned_repos_url}")
+            owned_response = requests.get(owned_repos_url, headers=headers)
+
+            if owned_response.status_code != 200:
+                print(f"[ERROR] GitLab API error fetching owned repos ({owned_response.status_code}): {owned_response.text}")
+                raise Exception(f"GitLab API error ({owned_response.status_code}): {owned_response.text}")
+
+            owned_has_next = owned_response.headers.get("X-Next-Page", "").strip() != ""
+            owned_repos = owned_response.json()
+
+            # Fetch contributed projects
+            contributed_repos_url = f"{api_base_url}/projects?membership=true&owned=false&per_page={per_page}&page={gitlab_page}"
+            print(f"[DEBUG] Fetching contributed projects: {contributed_repos_url}")
+            contributed_response = requests.get(contributed_repos_url, headers=headers)
+
+            contributed_repos = []
+            contributed_has_next = False
+
+            if contributed_response.status_code == 200:
+                contributed_repos = contributed_response.json()
+                contributed_has_next = contributed_response.headers.get("X-Next-Page", "").strip() != ""
+                print(f"[INFO] Retrieved {len(contributed_repos)} contributed repositories")
+            else:
+                print(f"[WARN] Could not fetch contributed projects ({contributed_response.status_code}): {contributed_response.text}")
+
+            # Combine and deduplicate
+            all_repos = owned_repos + contributed_repos
+            seen_paths = set()
+            unique_repos = []
+            for repo in all_repos:
+                path = repo.get("path_with_namespace")
+                if path not in seen_paths:
+                    seen_paths.add(path)
+                    unique_repos.append(repo)
+
+            has_next = owned_has_next or contributed_has_next
+
+            formatted_repos = []
+            for repo in unique_repos:
+                formatted_repos.append({
+                    "name": repo.get("path_with_namespace"),
+                    "cloneUrl": repo.get("http_url_to_repo"),
+                    "htmlUrl": repo.get("web_url"),
+                    "language": "Gitlab",
+                    "private": repo.get("visibility") == "private",
+                    "visibility": repo.get("visibility", "public")
+                })
+
+            print(f"[INFO] Retrieved {len(formatted_repos)} total repositories (owned + contributed, deduplicated)")
+            return {"content": formatted_repos, "hasNext": has_next}
+
     else:
         # For groups (orgs in GitLab)
-        repos_url = f"{api_base_url}/groups/{name}/projects?per_page={per_page}&page={page}&include_subgroups=true"
-    
-    print(f"[DEBUG] Calling URL: {repos_url}")
-    
-    response = requests.get(repos_url, headers=headers)
 
-    if response.status_code != 200:
-        print(f"[ERROR] GitLab API error ({response.status_code}): {response.text}")
-        raise Exception(f"GitLab API error ({response.status_code}): {response.text}")
+        if search and search.strip():
+            # Use group search API
+            # First, we need to get the group ID
+            group_url = f"{api_base_url}/groups/{requests.utils.quote(name, safe='')}"
+            group_response = requests.get(group_url, headers=headers)
 
-    # Check for pagination
-    has_next = response.headers.get("X-Next-Page", "").strip() != ""
-    
-    formatted_repos = []
-    for repo in response.json():
-        formatted_repos.append({
-            "name": repo.get("path_with_namespace"),
-            "cloneUrl": repo.get("http_url_to_repo"),
-            "htmlUrl": repo.get("web_url"),
-            "language": "Gitlab",
-            "private": repo.get("visibility") == "private",
-            "visibility": repo.get("visibility", "public")
-        })
+            if group_response.status_code != 200:
+                print(f"[ERROR] GitLab API error fetching group ({group_response.status_code}): {group_response.text}")
+                raise Exception(f"GitLab API error ({group_response.status_code}): {group_response.text}")
 
-    print(f"[INFO] Retrieved {len(formatted_repos)} repositories")
-    return {"content": formatted_repos, "hasNext": has_next}
+            group_id = group_response.json().get("id")
+
+            # Use group search endpoint
+            search_url = f"{api_base_url}/groups/{group_id}/search?scope=projects&search={requests.utils.quote(search)}&per_page={per_page}&page={gitlab_page}"
+            print(f"[DEBUG] Using GitLab group search: {search_url}")
+
+            response = requests.get(search_url, headers=headers)
+
+            if response.status_code != 200:
+                print(f"[ERROR] GitLab API error ({response.status_code}): {response.text}")
+                raise Exception(f"GitLab API error ({response.status_code}): {response.text}")
+
+            has_next = response.headers.get("X-Next-Page", "").strip() != ""
+            repos = response.json()
+
+            formatted_repos = []
+            for repo in repos:
+                formatted_repos.append({
+                    "name": repo.get("path_with_namespace"),
+                    "cloneUrl": repo.get("http_url_to_repo"),
+                    "htmlUrl": repo.get("web_url"),
+                    "language": "Gitlab",
+                    "private": repo.get("visibility") == "private",
+                    "visibility": repo.get("visibility", "public")
+                })
+
+            print(f"[INFO] GitLab group search returned {len(formatted_repos)} matching repositories")
+            return {"content": formatted_repos, "hasNext": has_next}
+
+        else:
+            # No search - normal group project listing
+            repos_url = f"{api_base_url}/groups/{name}/projects?per_page={per_page}&page={gitlab_page}&include_subgroups=true"
+            print(f"[DEBUG] Calling URL: {repos_url}")
+
+            response = requests.get(repos_url, headers=headers)
+
+            if response.status_code != 200:
+                print(f"[ERROR] GitLab API error ({response.status_code}): {response.text}")
+                raise Exception(f"GitLab API error ({response.status_code}): {response.text}")
+
+            has_next = response.headers.get("X-Next-Page", "").strip() != ""
+
+            formatted_repos = []
+            for repo in response.json():
+                formatted_repos.append({
+                    "name": repo.get("path_with_namespace"),
+                    "cloneUrl": repo.get("http_url_to_repo"),
+                    "htmlUrl": repo.get("web_url"),
+                    "language": "Gitlab",
+                    "private": repo.get("visibility") == "private",
+                    "visibility": repo.get("visibility", "public")
+                })
+
+            print(f"[INFO] Retrieved {len(formatted_repos)} repositories")
+            return {"content": formatted_repos, "hasNext": has_next}
 
 
 # --------------------
@@ -460,13 +607,14 @@ def gitlab_list_branches(repo_url, token, base_url=None):
     """
     Fetches all branch names for a given GitLab repository URL,
     supporting both public and enterprise GitLab.
-    
+
     Args:
         repo_url: GitLab repository URL
         token: GitLab access token (team-specific)
         base_url: Custom GitLab base URL for enterprise (optional)
     """
-    is_enterprise = base_url is not None
+    # Determine if this is truly enterprise (not just https://gitlab.com)
+    is_enterprise = base_url is not None and base_url.rstrip('/') not in ["https://gitlab.com", "https://gitlab.com/api/v4"]
     print(f"[INFO] Fetching branches for repo: {repo_url} (Enterprise: {is_enterprise})")
 
     # Extract project path from GitLab URL
@@ -519,13 +667,14 @@ def gitlab_get_default_branch(repo_url, token, base_url=None):
     """
     Fetches the default branch for a given GitLab repository URL,
     supporting both public and enterprise GitLab.
-    
+
     Args:
         repo_url: GitLab repository URL
         token: GitLab access token (team-specific)
         base_url: Custom GitLab base URL for enterprise (optional)
     """
-    is_enterprise = base_url is not None
+    # Determine if this is truly enterprise (not just https://gitlab.com)
+    is_enterprise = base_url is not None and base_url.rstrip('/') not in ["https://gitlab.com", "https://gitlab.com/api/v4"]
     print(f"[INFO] Fetching default branch for repo: {repo_url} (Enterprise: {is_enterprise})")
 
     # Extract project path from GitLab URL
@@ -806,43 +955,44 @@ def lambda_handler(event, context):
                 }
             
             target_type = repo_type if repo_type in ["user", "org"] else "user"
-            page = int(body.get("page", 1))
-            page_size = int(body.get("pageSize", 100))
+            page = int(body.get("page", 0))  # 0-based pagination from client
+            page_size = int(body.get("pageSize", 50))
+            search = body.get("search")  # Extract search parameter for both platforms
 
             if platform == "github":
                 visibility = body.get("visibility", "all")
-                search = body.get("search")
 
                 # Validate visibility parameter
                 valid_visibilities = ["all", "public", "private", "internal"]
                 if visibility not in valid_visibilities:
                     return {
-                        "statusCode": 400, 
+                        "statusCode": 400,
                         "body": json.dumps({"error": f"Invalid 'visibility' parameter. Must be one of: {', '.join(valid_visibilities)}"})
                     }
 
                 print(f"[INFO] Fetching GitHub repos for type='{target_type}', name='{name}', visibility='{visibility}', search='{search}'")
 
                 repos_data = github_list_repositories(
-                    name, 
-                    target_type, 
+                    name,
+                    target_type,
                     team_config["token"],
                     base_url=team_config["base_url"],
-                    page=page, 
-                    per_page=page_size, 
+                    page=page + 1,  # GitHub uses 1-based pagination
+                    per_page=page_size,
                     visibility=visibility,
                     search=search
                 )
             elif platform == "gitlab":
-                print(f"[INFO] Fetching GitLab repos for type='{target_type}', name='{name}'")
+                print(f"[INFO] Fetching GitLab repos for type='{target_type}', name='{name}', search='{search}'")
 
                 repos_data = gitlab_list_repositories(
                     name,
                     target_type,
                     team_config["token"],
                     base_url=team_config["base_url"],
-                    page=page,
-                    per_page=page_size
+                    page=page,  # GitLab function now handles 0-based to 1-based conversion internally
+                    per_page=page_size,
+                    search=search
                 )
             else:
                 return {"statusCode": 400, "body": json.dumps({"error": f"Invalid platform: '{platform}'. Must be 'github' or 'gitlab'."})}
@@ -1084,6 +1234,189 @@ def lambda_handler(event, context):
             return {"statusCode": 202, "body": json.dumps({"message": f"K8s job '{job_name}' accepted for processing."})}
 
         # ======================
+        # Action: trigger_ai_sast_scan (HYBRID MODE)
+        # ======================
+        elif action == "trigger_ai_sast_scan":
+            print("[INFO] Action: trigger_ai_sast_scan (HYBRID MODE)")
+
+            args_dict = body.get("args", {})
+            if not args_dict:
+                return {"statusCode": 400, "body": json.dumps({"error": "Job arguments ('args') dictionary cannot be empty."})}
+
+            # Get required parameters from args
+            job_id = args_dict.get("job-id")
+            if not job_id:
+                return {"statusCode": 400, "body": json.dumps({"error": "Missing required parameter 'job-id' in 'args'."})}
+
+            batch_id = args_dict.get("batch-id")
+            if not batch_id:
+                return {"statusCode": 400, "body": json.dumps({"error": "Missing required parameter 'batch-id' in 'args' for AI-SAST scan."})}
+
+            repo_url = args_dict.get("repo-url")
+            if not repo_url:
+                return {"statusCode": 400, "body": json.dumps({"error": "Missing required parameter 'repo-url' in 'args' for AI-SAST scan."})}
+
+            # Determine platform from repo-type or body
+            repo_type = args_dict.get("repo-type", "").upper()
+            platform = body.get("platform", "").lower()
+
+            if not platform:
+                if repo_type in ["GITHUB", "BRANCH"]:
+                    platform = "github"
+                elif repo_type == "GITLAB":
+                    platform = "gitlab"
+                else:
+                    # Try to auto-detect from URL
+                    if "gitlab" in repo_url.lower():
+                        platform = "gitlab"
+                    else:
+                        platform = "github"
+
+            print(f"[INFO] Detected platform: {platform}")
+
+            # Get team-specific configuration
+            try:
+                team_config = get_team_config(team_name, platform=platform, use_enterprise=use_enterprise)
+            except ValueError as e:
+                return {"statusCode": 400, "body": json.dumps({"error": str(e)})}
+
+            # Construct the job name for AI-SAST scan
+            job_name = f"ai-sast-{job_id}"
+            print(f"[INFO] Constructed AI-SAST job name: {job_name}")
+
+            # Use dedicated AI-SAST image
+            image = os.environ.get("AI_SAST_IMAGE")
+            if not image:
+                return {"statusCode": 500, "body": json.dumps({"error": "AI_SAST_IMAGE environment variable not set."})}
+
+            cluster_name = os.environ.get("EKS_CLUSTER_NAME")
+            region = os.environ.get("AWS_REGION")
+
+            if not cluster_name:
+                return {"statusCode": 500, "body": json.dumps({"error": "EKS_CLUSTER_NAME environment variable not set."})}
+
+            # Set up environment variables for AI-SAST scanner
+            # Start with any env vars passed from the ai-sast-service
+            env_vars = body.get("env", {})
+
+            # Handle repository authentication for private repos
+            is_enterprise = team_config.get("is_enterprise", False)
+            url_without_scheme = repo_url.replace("https://", "").replace("http://", "")
+
+            parsed_repo = urlparse(repo_url)
+
+            # Always strip any embedded creds from backend URL and rebuild with customer token from env/team config
+            host_netloc = parsed_repo.hostname or ""
+            if parsed_repo.port:
+                host_netloc = f"{host_netloc}:{parsed_repo.port}"
+            if not host_netloc:
+                host_netloc = repo_url.replace("https://", "").replace("http://", "")
+
+            if platform == "github":
+                authenticated_netloc = f"{team_config['token']}@{host_netloc}"
+                rebuilt = parsed_repo._replace(netloc=authenticated_netloc)
+                authenticated_url = urlunparse(rebuilt)
+                env_vars["GITHUB_TOKEN"] = team_config["token"]
+                if team_config["base_url"]:
+                    env_vars["GITHUB_ENTERPRISE_URL"] = team_config["base_url"]
+                env_vars["GITREPO"] = authenticated_url
+                print(f"[INFO] Constructed authenticated GITREPO URL for AI-SAST scan on {platform} using customer token.")
+            elif platform == "gitlab":
+                authenticated_netloc = f"oauth2:{team_config['token']}@{host_netloc}"
+                rebuilt = parsed_repo._replace(netloc=authenticated_netloc)
+                authenticated_url = urlunparse(rebuilt)
+                env_vars["GITLAB_TOKEN"] = team_config["token"]
+                if team_config["base_url"]:
+                    env_vars["GITLAB_ENTERPRISE_URL"] = team_config["base_url"]
+                env_vars["GITREPO"] = authenticated_url
+                print(f"[INFO] Constructed authenticated GITREPO URL for AI-SAST scan on {platform} using customer token.")
+            else:
+                env_vars["GITREPO"] = repo_url
+
+            # Core AI-SAST configuration from args
+            env_vars["SCAN_HISTORY_BATCH_ID"] = str(batch_id)
+
+            # Optional scan instance id (canonical naming only)
+            if args_dict.get("scan-instance-id"):
+                env_vars["SCAN_INSTANCE_ID"] = str(args_dict.get("scan-instance-id"))
+
+            # HYBRID MODE: This Lambda is deployed in customer env, always uses hybrid mode
+            print("[INFO] HYBRID MODE ENABLED - Using backend API endpoints instead of direct DB access")
+
+            # Validate required hybrid mode env vars (passed from ai-sast-service)
+            if not env_vars.get("AI_SAST_HYBRID_FINDINGS_ENDPOINT"):
+                return {"statusCode": 500, "body": json.dumps({"error": "AI_SAST_HYBRID_FINDINGS_ENDPOINT not set in env for hybrid mode."})}
+            if not env_vars.get("AI_SAST_HYBRID_UPLOAD_ENDPOINT"):
+                return {"statusCode": 500, "body": json.dumps({"error": "AI_SAST_HYBRID_UPLOAD_ENDPOINT not set in env for hybrid mode."})}
+
+            # Set hybrid mode flag
+            env_vars["IS_HYBRID_MODE"] = "true"
+
+            # DO NOT pass database credentials in hybrid mode
+            # The scanner will fetch from and upload to backend API endpoints
+            print("[INFO] HYBRID MODE: Skipping DB credentials - scanner will use backend API endpoints")
+
+            # DO NOT pass cloud storage credentials in hybrid mode
+            print("[INFO] HYBRID MODE: Skipping cloud storage credentials")
+
+            # LLM API Keys - check env vars first (from ai-sast-service), then Lambda environment
+            # In hybrid mode, customer's OpenAI deployment is used
+            if not env_vars.get("OPENAI_API_KEY"):
+                openai_api_key = os.environ.get("OPENAI_API_KEY")
+                if openai_api_key:
+                    env_vars["OPENAI_API_KEY"] = openai_api_key
+
+            # HYBRID MODE: Support customer's private OpenAI deployment (including Azure OpenAI)
+            # OPENAI_API_BASE: Custom endpoint URL (e.g., https://your-company.openai.azure.com/)
+            # OPENAI_API_VERSION: API version for Azure OpenAI (e.g., 2024-02-15-preview)
+            # OPENAI_API_TYPE: Set to "azure" for Azure OpenAI, otherwise standard OpenAI
+            if not env_vars.get("OPENAI_API_BASE"):
+                openai_api_base = os.environ.get("OPENAI_API_BASE")
+                if openai_api_base:
+                    env_vars["OPENAI_API_BASE"] = openai_api_base
+                    print(f"[INFO] HYBRID MODE: Using custom OpenAI endpoint: {openai_api_base}")
+
+            if not env_vars.get("OPENAI_API_VERSION"):
+                openai_api_version = os.environ.get("OPENAI_API_VERSION")
+                if openai_api_version:
+                    env_vars["OPENAI_API_VERSION"] = openai_api_version
+
+            if not env_vars.get("OPENAI_API_TYPE"):
+                openai_api_type = os.environ.get("OPENAI_API_TYPE")
+                if openai_api_type:
+                    env_vars["OPENAI_API_TYPE"] = openai_api_type
+                    print(f"[INFO] HYBRID MODE: OpenAI API type: {openai_api_type}")
+
+            if not env_vars.get("GEMINI_API_KEY"):
+                gemini_api_key = os.environ.get("GEMINI_API_KEY")
+                if gemini_api_key:
+                    env_vars["GEMINI_API_KEY"] = gemini_api_key
+
+            # Backend notification URL (for notifying backend when scan completes)
+            if not env_vars.get("AI_SAST_RESULT_URL"):
+                env_vars["AI_SAST_RESULT_URL"] = os.environ.get("AI_SAST_RESULT_URL", "")
+
+            # Ensure CLOUDDEFENSE_API_KEY is set (for authenticating with backend endpoints)
+            if not env_vars.get("CLOUDDEFENSE_API_KEY"):
+                env_vars["CLOUDDEFENSE_API_KEY"] = os.environ.get("CLOUDDEFENSE_API_KEY", "")
+
+            # Build command-line to run the scanner entrypoint with hybrid flag
+            args_list = ["python", "-m", "app.main", "--hybrid-mode"]
+
+            if is_enterprise:
+                args_list.append("--is-enterprise")
+
+            # Log configuration (excluding sensitive values)
+            safe_env_keys = [k for k in env_vars.keys() if 'KEY' not in k.upper() and 'PASSWORD' not in k.upper() and 'SECRET' not in k.upper() and 'TOKEN' not in k.upper()]
+            print(f"[INFO] AI-SAST environment variables configured (non-sensitive): {safe_env_keys}")
+            print(f"[INFO] AI-SAST command arguments: {args_list}")
+            print("[INFO] Triggering AI-SAST EKS job (HYBRID MODE)...")
+
+            trigger_eks_job(cluster_name, region, job_name, image, env_vars, args_list)
+            print("[SUCCESS] AI-SAST job submission completed (HYBRID MODE).")
+            return {"statusCode": 202, "body": json.dumps({"message": f"AI-SAST K8s job '{job_name}' accepted for processing (hybrid mode)."})}
+
+        # ======================
         # Action: job_status_check
         # ======================
         elif action == "job_status_check":
@@ -1095,7 +1428,9 @@ def lambda_handler(event, context):
             if not job_id:
                 return {"statusCode": 400, "body": json.dumps({"error": "Missing required parameter: 'job-id'"})}
             
-            if job_type == "public":
+            if job_type == "ai-sast":
+                job_name_to_check = f"ai-sast-{job_id}"
+            elif job_type == "public":
                 job_name_to_check = f"cdefense-public-{job_id}"
             else:
                 job_name_to_check = f"cdefense-hbyrid-{job_id}"
