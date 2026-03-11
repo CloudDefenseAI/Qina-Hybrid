@@ -1,0 +1,96 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: default
+---
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: licensecachesca-redis-pvc
+  namespace: default
+spec:
+  storageClassName: gp2  # or gp3; leave commented to use default
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: licensecachesca
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: licensecachesca
+  template:
+    metadata:
+      labels:
+        app: licensecachesca
+    spec:
+      imagePullSecrets:
+        - name: image-secret
+      containers:
+        - name: licensecachesca
+          image: cdefense/license-cache-service:qa
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 50051
+              name: grpc
+            - containerPort: 6379
+              name: redis
+          volumeMounts:
+            - name: redis-data
+              mountPath: /data
+          livenessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - "redis-cli ping | grep -q PONG && nc -z localhost 50051"
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - "redis-cli ping | grep -q PONG && nc -z localhost 50051"
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          resources:
+            requests:
+              memory: "250Mi"
+              cpu: "25m"
+            limits:
+              memory: "320Mi"
+      volumes:
+        - name: redis-data
+          persistentVolumeClaim:
+            claimName: licensecachesca-redis-pvc
+        
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: licensecachesca
+  namespace: default
+spec:
+  type: ClusterIP
+  selector:
+    app: licensecachesca
+  ports:
+    - port: 50051
+      targetPort: 50051
+      name: grpc
+    - port: 6379
+      targetPort: 6379
+      name: redis
