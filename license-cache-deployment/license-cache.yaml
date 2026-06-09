@@ -36,7 +36,7 @@ spec:
         - name: image-secret
       containers:
         - name: licensecachesca
-          image: cdefense/license-cache-service:qa
+          image: cdefense/license-cache-service:prod
           imagePullPolicy: Always
           ports:
             - containerPort: 50051
